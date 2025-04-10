@@ -126,6 +126,51 @@ This rule show error that will help to fix that problem:
 ...
 ```
 
+## How to use
+
+To add this rule to your project add following rule in
+[Maven Enforcer plugin](https://maven.apache.org/enforcer/enforcer-api/writing-a-custom-rule.html#using-custom-rule):
+
+```xml
+...
+<build>
+    ...
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>3.5.0</version>
+            <dependencies>
+                <dependency>
+                    <groupId>pro.zavodnikov.maven.rule</groupId>
+                    <artifactId>no-overwrite-dependencies</artifactId>
+                    <version>1.0.0</version>
+                </dependency>
+            </dependencies>
+            <executions>
+                <execution>
+                    <id>enforce-rules</id>
+                    <goals>
+                        <goal>enforce</goal>
+                    </goals>
+                </execution>
+            </executions>
+            <configuration>
+                <!--
+                    See:
+                        https://maven.apache.org/enforcer/enforcer-rules/
+                -->
+                <rules>
+                    <noOverwriteDependencies />
+                </rules>
+            </configuration>
+        </plugin>
+    </plugins>
+    ...
+</build>
+...
+```
+
 ## License
 
 Distributed under MIT License.
