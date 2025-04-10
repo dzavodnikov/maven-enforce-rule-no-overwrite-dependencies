@@ -1,0 +1,5 @@
+# Ignore all dot-files and dot-folders.
+.*
+
+# Save gitignore.
+!/.gitignore
