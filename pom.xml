@@ -1,0 +1,44 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>pro.zavodnikov.maven.rule</groupId>
+    <artifactId>no-overwrite-dependencies</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>maven-enforce-rule-no-overwrite-dependencies</name>
+    <description>Rule for Maven Enforcer plugin that verify that child POMs do not overwrite dependencies from parent POM</description>
+    <url>https://github.com/dzavodnikov/maven-enforce-rule-no-overwrite-dependencies/</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT/</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://github.com/dzavodnikov/maven-enforce-rule-no-overwrite-dependencies/</url>
+    </scm>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <maven.build.timestamp.format>yyyyMMdd.HHmmss</maven.build.timestamp.format>
+
+        <maven.compiler.release>11</maven.compiler.release>
+    </properties>
+
+    <dependencies>
+        <!-- Source: https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-api -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>5.14.3</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
