@@ -23,16 +23,17 @@
  */
 package pro.zavodnikov.maven.rule;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 
 import org.apache.maven.enforcer.rule.api.AbstractEnforcerRule;
 import org.apache.maven.enforcer.rule.api.EnforcerRuleException;
-import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.Dependency;
 import org.apache.maven.project.MavenProject;
-import org.apache.maven.rtinfo.RuntimeInformation;
 
 /**
  * No Overwrite Dependencies rule.
@@ -40,68 +41,63 @@ import org.apache.maven.rtinfo.RuntimeInformation;
 @Named("noOverwriteDependencies")
 public class NoOverwriteDependencies extends AbstractEnforcerRule {
 
-    /**
-     * Simple param. This rule fails if the value is true.
-     */
-    private boolean shouldIfail = false;
-
-    /**
-     * Rule parameter as list of items.
-     */
-    private List<String> listParameters;
-
-    // Inject needed Maven components
-
     @Inject
     private MavenProject project;
 
-    @Inject
-    private MavenSession session;
+    /**
+     * Find dependency from the list that have same Group ID and Artifact ID, but
+     * different Version.
+     *
+     * @param dependencies list of dependencies for search.
+     * @param target       dependency that provide Group ID, Artifact ID and
+     *                     Version.
+     * @return dependency with different version of <code>null</code>.
+     */
+    public static Dependency find(final List<Dependency> dependencies, final Dependency target) {
+        for (Dependency dep : dependencies) {
+            if (Objects.equals(dep.getGroupId(), target.getGroupId())
+                    && Objects.equals(dep.getArtifactId(), target.getArtifactId())
+                    && !Objects.equals(dep.getVersion(), target.getVersion())) {
+                return dep;
+            }
+        }
+        return null;
+    }
 
-    @Inject
-    private RuntimeInformation runtimeInformation;
-
-    @Override
-    public void execute() throws EnforcerRuleException {
-        getLog().info("Retrieved Target Folder: " + this.project.getBuild().getDirectory());
-        getLog().info("Retrieved ArtifactId: " + this.project.getArtifactId());
-        getLog().info("Retrieved Project: " + this.project);
-        getLog().info("Retrieved Maven version: " + this.runtimeInformation.getMavenVersion());
-        getLog().info("Retrieved Session: " + this.session);
-        getLog().warnOrError("Parameter shouldIfail: " + this.shouldIfail);
-        getLog().info(() -> "Parameter listParameters: " + this.listParameters);
-
-        if (this.shouldIfail) {
-            throw new EnforcerRuleException("Failing because my param said so.");
+    /**
+     * Verify that no any dependency from first list do not overwrite any dependency
+     * from the second list.
+     */
+    public static void verifyDependencies(final List<Dependency> dependencies,
+            final List<Dependency> dependenciesNoOverwrite) throws EnforcerRuleException {
+        final List<String> depVersionsOverwritten = new ArrayList<>();
+        for (Dependency dep : dependencies) {
+            final Dependency differentVersion = find(dependenciesNoOverwrite, dep);
+            if (differentVersion != null) {
+                depVersionsOverwritten.add(String.format("%s:%s:%s override by version %s",
+                        differentVersion.getGroupId(),
+                        differentVersion.getArtifactId(),
+                        differentVersion.getVersion(),
+                        dep.getVersion()));
+            }
+        }
+        if (!depVersionsOverwritten.isEmpty()) {
+            final StringBuilder sb = new StringBuilder();
+            sb.append("Following dependencies try to overwrite dependencies from parent POM:");
+            sb.append("\n");
+            for (String line : depVersionsOverwritten) {
+                sb.append(" - ");
+                sb.append(line);
+                sb.append("\n");
+            }
+            throw new EnforcerRuleException(sb.toString());
         }
     }
 
-    /**
-     * If your rule is cacheable, you must return a unique id when parameters or
-     * conditions change that would cause the result to be different. Multiple
-     * cached results are stored based on their id.
-     *
-     * The easiest way to do this is to return a hash computed from the values of
-     * your parameters.
-     *
-     * If your rule is not cacheable, then you don't need to override this method or
-     * return null.
-     */
     @Override
-    public String getCacheId() {
-        // No hash on boolean...only parameter so no hash is needed.
-        return Boolean.toString(this.shouldIfail);
-    }
-
-    /**
-     * A good practice is provided toString method for Enforcer Rule.
-     *
-     * Output is used in verbose Maven logs, can help during investigate problems.
-     *
-     * @return rule description
-     */
-    @Override
-    public String toString() {
-        return String.format("NoOverwriteDependencies[shouldIfail=%b]", this.shouldIfail);
+    public void execute() throws EnforcerRuleException {
+        final List<Dependency> dependenciesNoOverwrite = this.project.getDependencyManagement().getDependencies();
+        final List<Dependency> dependencies = this.project.getDependencies();
+        verifyDependencies(dependencies, dependenciesNoOverwrite);
     }
 }
