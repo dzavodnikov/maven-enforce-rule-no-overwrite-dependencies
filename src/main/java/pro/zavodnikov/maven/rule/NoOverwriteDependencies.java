@@ -23,17 +23,29 @@
  */
 package pro.zavodnikov.maven.rule;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.enforcer.rule.api.AbstractEnforcerRule;
 import org.apache.maven.enforcer.rule.api.EnforcerRuleException;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
+import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.project.ProjectBuildingRequest;
+import org.apache.maven.shared.dependency.graph.DependencyGraphBuilder;
+import org.apache.maven.shared.dependency.graph.DependencyGraphBuilderException;
+import org.apache.maven.shared.dependency.graph.DependencyNode;
 
 /**
  * No Overwrite Dependencies rule.
@@ -43,6 +55,12 @@ public class NoOverwriteDependencies extends AbstractEnforcerRule {
 
     @Inject
     private MavenProject project;
+
+    @Inject
+    private MavenSession session;
+
+    @Inject
+    private DependencyGraphBuilder dependencyGraphBuilder;
 
     /**
      * Find dependency from the list that have same Group ID and Artifact ID, but
@@ -94,10 +112,56 @@ public class NoOverwriteDependencies extends AbstractEnforcerRule {
         }
     }
 
+    private Dependency depNodeToDep(final DependencyNode depNode) {
+        final Artifact artifact = depNode.getArtifact();
+        final Dependency dependency = new Dependency();
+        dependency.setGroupId(artifact.getGroupId());
+        dependency.setArtifactId(artifact.getArtifactId());
+        dependency.setVersion(artifact.getVersion());
+        return dependency;
+    }
+
     @Override
     public void execute() throws EnforcerRuleException {
-        final List<Dependency> dependenciesNoOverwrite = this.project.getDependencyManagement().getDependencies();
+        final Set<DependencyNode> processed = new HashSet<>();
+        try {
+            final ProjectBuildingRequest request = new DefaultProjectBuildingRequest();
+            request.setProject(this.project);
+            request.setRepositorySession(this.session.getRepositorySession());
+
+            final DependencyNode rootNode = this.dependencyGraphBuilder.buildDependencyGraph(request, null);
+
+            final Queue<DependencyNode> toProcess = new ArrayDeque<>();
+            toProcess.add(rootNode);
+
+            while (!toProcess.isEmpty()) {
+                final DependencyNode current = toProcess.poll();
+                if (processed.contains(current)) {
+                    continue;
+                }
+
+                processed.add(current);
+                toProcess.addAll(current.getChildren());
+            }
+        } catch (DependencyGraphBuilderException e) {
+            throw new EnforcerRuleException(e);
+        }
+
+        final List<Dependency> dependenciesNoOverwrite = processed.stream().map(this::depNodeToDep)
+                .collect(Collectors.toList());
+
+        System.out.println("dependenciesNoOverwrite:");
+        for (Dependency dep : dependenciesNoOverwrite) {
+            System.out.println(" - " + dep.toString());
+        }
+
         final List<Dependency> dependencies = this.project.getDependencies();
+
+        System.out.println("dependencies:");
+        for (Dependency dep : dependencies) {
+            System.out.println(" - " + dep.toString());
+        }
+
         verifyDependencies(dependencies, dependenciesNoOverwrite);
     }
 }
