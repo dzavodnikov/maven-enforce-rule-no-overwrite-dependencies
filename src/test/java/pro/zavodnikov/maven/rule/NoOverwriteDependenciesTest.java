@@ -95,7 +95,22 @@ public class NoOverwriteDependenciesTest extends AbstractRuleTest {
     }
 
     @Test
+    public void testNoOverwriteWrongScopeParentLevel1() throws EnforcerRuleException {
+        assertThrows(EnforcerRuleException.class, () -> applyRuleTo("wrong-scope-parent1.xml"));
+    }
+
+    @Test
+    public void testNoOverwriteWrongScopeParentLevel2() throws EnforcerRuleException {
+        assertThrows(EnforcerRuleException.class, () -> applyRuleTo("wrong-scope-parent0.xml"));
+    }
+
+    @Test
     public void testNoOverwriteWrongTransitiveVersion() throws EnforcerRuleException {
         assertThrows(EnforcerRuleException.class, () -> applyRuleTo("wrong-version-transitive.xml"));
+    }
+
+    @Test
+    public void testNoOverwriteWrongTransitiveScope() throws EnforcerRuleException {
+        assertThrows(EnforcerRuleException.class, () -> applyRuleTo("wrong-scope-transitive.xml"));
     }
 }
