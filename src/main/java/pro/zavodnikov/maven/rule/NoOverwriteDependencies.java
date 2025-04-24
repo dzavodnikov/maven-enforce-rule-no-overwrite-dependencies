@@ -23,7 +23,13 @@
  */
 package pro.zavodnikov.maven.rule;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.Queue;
+import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -31,26 +37,19 @@ import javax.inject.Named;
 import org.apache.maven.enforcer.rule.api.AbstractEnforcerRule;
 import org.apache.maven.enforcer.rule.api.EnforcerRuleException;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.project.MavenProject;
-import org.apache.maven.rtinfo.RuntimeInformation;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.collection.CollectRequest;
+import org.eclipse.aether.collection.CollectResult;
+import org.eclipse.aether.collection.DependencyCollectionException;
+import org.eclipse.aether.util.graph.visitor.PreorderNodeListGenerator;
 
 /**
  * No Overwrite Dependencies rule.
  */
 @Named("noOverwriteDependencies")
 public class NoOverwriteDependencies extends AbstractEnforcerRule {
-
-    /**
-     * Simple param. This rule fails if the value is true.
-     */
-    private boolean shouldIfail = false;
-
-    /**
-     * Rule parameter as list of items.
-     */
-    private List<String> listParameters;
-
-    // Inject needed Maven components
 
     @Inject
     private MavenProject project;
@@ -59,49 +58,107 @@ public class NoOverwriteDependencies extends AbstractEnforcerRule {
     private MavenSession session;
 
     @Inject
-    private RuntimeInformation runtimeInformation;
+    private RepositorySystem repositorySystem;
 
-    @Override
-    public void execute() throws EnforcerRuleException {
-        getLog().info("Retrieved Target Folder: " + this.project.getBuild().getDirectory());
-        getLog().info("Retrieved ArtifactId: " + this.project.getArtifactId());
-        getLog().info("Retrieved Project: " + this.project);
-        getLog().info("Retrieved Maven version: " + this.runtimeInformation.getMavenVersion());
-        getLog().info("Retrieved Session: " + this.session);
-        getLog().warnOrError("Parameter shouldIfail: " + this.shouldIfail);
-        getLog().info(() -> "Parameter listParameters: " + this.listParameters);
+    private void debugPrint(final String message, final Collection<RuleDependency> deps) {
+        getLog().debug(message);
 
-        if (this.shouldIfail) {
-            throw new EnforcerRuleException("Failing because my param said so.");
+        for (RuleDependency d : deps) {
+            getLog().debug("- " + d.toString());
         }
     }
 
-    /**
-     * If your rule is cacheable, you must return a unique id when parameters or
-     * conditions change that would cause the result to be different. Multiple
-     * cached results are stored based on their id.
-     *
-     * The easiest way to do this is to return a hash computed from the values of
-     * your parameters.
-     *
-     * If your rule is not cacheable, then you don't need to override this method or
-     * return null.
-     */
-    @Override
-    public String getCacheId() {
-        // No hash on boolean...only parameter so no hash is needed.
-        return Boolean.toString(this.shouldIfail);
+    private boolean isSameArtifact(final RuleDependency projDep, final RuleDependency depManDep) {
+        return Objects.equals(projDep.getGroupId(), depManDep.getGroupId())
+                && Objects.equals(projDep.getArtifactId(), depManDep.getArtifactId());
     }
 
-    /**
-     * A good practice is provided toString method for Enforcer Rule.
-     *
-     * Output is used in verbose Maven logs, can help during investigate problems.
-     *
-     * @return rule description
+    private boolean isDifferentVersions(final RuleDependency projDep, final RuleDependency depManDep) {
+        if (projDep.getVersion() == null) { // Do not overwrite the version.
+            return false;
+        }
+        return isSameArtifact(projDep, depManDep)
+                && !Objects.equals(projDep.getVersion(), depManDep.getVersion());
+    }
+
+    /*
+     * See:
+     * https://github.com/apache/maven-dependency-plugin/blob/maven-dependency-
+     * plugin-3.8.1/src/main/java/org/apache/maven/plugins/dependency/utils/
+     * ResolverUtil.java#L76
      */
+    private List<RuleDependency> collectDependencies(final RuleDependency root) {
+        try {
+            final CollectRequest request = new CollectRequest(root.getGraphDependency(),
+                    this.session.getCurrentProject().getRemoteProjectRepositories());
+            final CollectResult result = this.repositorySystem.collectDependencies(
+                    this.session.getRepositorySession(), request);
+
+            final PreorderNodeListGenerator nodeListGenerator = new PreorderNodeListGenerator();
+            result.getRoot().accept(nodeListGenerator);
+            return nodeListGenerator.getDependencies(true).stream()
+                    .map(RuleDependency::new)
+                    .filter(d -> !root.equals(d))
+                    .collect(Collectors.toList());
+        } catch (DependencyCollectionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Override
-    public String toString() {
-        return String.format("NoOverwriteDependencies[shouldIfail=%b]", this.shouldIfail);
+    public void execute() throws EnforcerRuleException {
+        final DependencyManagement depMan = this.project.getDependencyManagement();
+        if (depMan == null) {
+            return;
+        }
+
+        final List<RuleDependency> projDeps = RuleDependency.convert(this.project.getDependencies());
+
+        final List<RuleDependency> depManDeps = new ArrayList<>();
+
+        final Queue<RuleDependency> toProcess = new ArrayDeque<>(RuleDependency.convert(depMan.getDependencies()));
+        while (!toProcess.isEmpty()) {
+            final RuleDependency current = toProcess.poll();
+            if (depManDeps.contains(current)) {
+                continue;
+            }
+
+            depManDeps.add(current);
+
+            final List<RuleDependency> transitiveDeps = collectDependencies(current);
+            if (getLog().isDebugEnabled()) {
+                debugPrint("Transitive dependencies of " + current.toString() + ":", transitiveDeps);
+            }
+            toProcess.addAll(transitiveDeps);
+        }
+
+        if (getLog().isDebugEnabled()) {
+            debugPrint("Project dependencies:", projDeps);
+            debugPrint("Dependencies Management:", depManDeps);
+        }
+
+        final List<String> overrideErrors = new ArrayList<>();
+        for (RuleDependency projDep : projDeps) {
+            for (RuleDependency depManDep : depManDeps) {
+                if (isDifferentVersions(projDep, depManDep)) {
+                    final String errorLine = String.format("%s:%s:%s override by version %s",
+                            depManDep.getGroupId(), depManDep.getArtifactId(), depManDep.getVersion(),
+                            projDep.getVersion());
+                    overrideErrors.add(errorLine);
+                }
+            }
+        }
+
+        if (!overrideErrors.isEmpty()) {
+            final StringBuilder sb = new StringBuilder();
+            sb.append("Following dependencies try to overwrite dependencies from parent POM:");
+            sb.append("\n");
+            for (String line : overrideErrors) {
+                sb.append(" - ");
+                sb.append(line);
+                sb.append("\n");
+            }
+            throw new EnforcerRuleException(sb.toString());
+        }
     }
 }
