@@ -81,6 +81,14 @@ public class NoOverwriteDependencies extends AbstractEnforcerRule {
                 && !Objects.equals(projDep.getVersion(), depManDep.getVersion());
     }
 
+    private boolean isDifferentScopes(final RuleDependency projDep, final RuleDependency depManDep) {
+        if (projDep.getScope() == null) { // Do not overwrite the scope.
+            return false;
+        }
+        return isSameArtifact(projDep, depManDep)
+                && !Objects.equals(projDep.getScope(), depManDep.getScope());
+    }
+
     /*
      * See:
      * https://github.com/apache/maven-dependency-plugin/blob/maven-dependency-
@@ -144,6 +152,14 @@ public class NoOverwriteDependencies extends AbstractEnforcerRule {
                     final String errorLine = String.format("%s:%s:%s override by version %s",
                             depManDep.getGroupId(), depManDep.getArtifactId(), depManDep.getVersion(),
                             projDep.getVersion());
+                    overrideErrors.add(errorLine);
+                }
+
+                if (isDifferentScopes(projDep, depManDep)) {
+                    final String errorLine = String.format("%s:%s:%s with scope %s override by scope %s",
+                            depManDep.getGroupId(), depManDep.getArtifactId(), depManDep.getVersion(),
+                            depManDep.getScope(),
+                            projDep.getScope());
                     overrideErrors.add(errorLine);
                 }
             }
