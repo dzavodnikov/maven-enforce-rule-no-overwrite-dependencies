@@ -53,7 +53,14 @@
                         <!--
                             If we use some dependency in parent POM we should not overwrite it in child POM.
                         -->
-                        <noOverwriteDependencies />
+                        <noOverwriteDependencies>
+                            <exclusions>
+                                <exclusion>
+                                    <groupId>commons-lang</groupId>
+                                    <artifactId>commons-lang</artifactId>
+                                </exclusion>
+                            </exclusions>
+                        </noOverwriteDependencies>
                     </rules>
                 </configuration>
             </plugin>
