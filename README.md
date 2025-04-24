@@ -126,6 +126,8 @@ This rule show error that will help to fix that problem:
 ...
 ```
 
+See more examples at [src/test/resource](./src/test/resources/).
+
 ## How to use
 
 To add this rule to your project add following rule in
@@ -169,6 +171,13 @@ To add this rule to your project add following rule in
     ...
 </build>
 ...
+```
+
+# Debug
+
+```sh
+$ export MAVEN_OPTS="-Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.enforcer=debug"
+$ mvn verify
 ```
 
 ## License

@@ -1,0 +1,27 @@
+<!--
+    Configuration of logback.
+    See:
+        https://logback.qos.ch/manual/
+    File should be in classpath or provided via parameter "-Dlogback.configurationFile=/path/to/logback.xml".
+-->
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss, UTC} [%highlight(%-5level)] %logger %mdc: %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+        Available log levels are:
+        TRACE, DEBUG, INFO, WARN, ERROR, OFF
+    -->
+    <root level="TRACE">
+        <appender-ref ref="STDOUT" />
+    </root>
+
+    <!--
+        Overwrite root config.
+    -->
+    <logger name="Sisu" level="INFO" />
+    <logger name="org.eclipse.aether" level="INFO" />
+</configuration>
