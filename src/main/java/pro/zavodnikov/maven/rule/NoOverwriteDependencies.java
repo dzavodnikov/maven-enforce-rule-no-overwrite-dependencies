@@ -38,6 +38,7 @@ import org.apache.maven.enforcer.rule.api.AbstractEnforcerRule;
 import org.apache.maven.enforcer.rule.api.EnforcerRuleException;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.DependencyManagement;
+import org.apache.maven.model.Exclusion;
 import org.apache.maven.project.MavenProject;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.collection.CollectRequest;
@@ -50,6 +51,8 @@ import org.eclipse.aether.util.graph.visitor.PreorderNodeListGenerator;
  */
 @Named("noOverwriteDependencies")
 public class NoOverwriteDependencies extends AbstractEnforcerRule {
+
+    private List<Exclusion> exclusions;
 
     @Inject
     private MavenProject project;
@@ -121,6 +124,27 @@ public class NoOverwriteDependencies extends AbstractEnforcerRule {
         }
 
         final List<RuleDependency> projDeps = RuleDependency.convert(this.project.getDependencies());
+
+        // Exclude some dependencies.
+        if (this.exclusions != null) {
+            if (getLog().isDebugEnabled()) {
+                getLog().debug("Exclusions:");
+                for (Exclusion excl : this.exclusions) {
+                    getLog().debug(excl.getGroupId() + ":" + excl.getArtifactId());
+                }
+            }
+
+            final List<RuleDependency> remove = new ArrayList<>();
+            for (Exclusion excl : this.exclusions) {
+                for (RuleDependency rd : projDeps) {
+                    if (Objects.equals(rd.getGroupId(), excl.getGroupId())
+                            && Objects.equals(rd.getArtifactId(), excl.getArtifactId())) {
+                        remove.add(rd);
+                    }
+                }
+            }
+            projDeps.removeAll(remove);
+        }
 
         final List<RuleDependency> depManDeps = new ArrayList<>();
 
